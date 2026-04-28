@@ -1,0 +1,41 @@
+# Generate Baseline SVD Cache
+CUDA_VISIBLE_DEVICES=0 nohup python -m scripts.calibrate_svd --svd_mode baseline --svd_init_path outputs/svd_cache/init_baseline.pt > logs/calib_baseline.out 2>&1 &
+
+# Generate RL-Fisher SVD Cache
+CUDA_VISIBLE_DEVICES=1 nohup python -m scripts.calibrate_svd --svd_mode rl_fisher --svd_init_path outputs/svd_cache/init_rl_fisher.pt > logs/calib_rl_fisher.out 2>&1 &
+
+# Generate AWQ SVD Cache
+CUDA_VISIBLE_DEVICES=2 nohup python -m scripts.calibrate_svd --svd_mode awq --svd_init_path outputs/svd_cache/init_awq.pt > logs/calib_awq.out 2>&1 &
+
+# ---------------------------------------------------------
+# PHASE 1: RL-Initialization Benchmark
+# ---------------------------------------------------------
+
+# Run 0.1: Baseline SVD -> Native RL
+CUDA_VISIBLE_DEVICES=0 nohup python -m scripts.train_rl --svd_init_path outputs/svd_cache/init_baseline.pt --topological_constraint none > logs/run_0.1_baseline_rl.out 2>&1 &
+
+# Run 1.1: RL-Fisher SVD -> Native RL
+CUDA_VISIBLE_DEVICES=1 nohup python -m scripts.train_rl --svd_init_path outputs/svd_cache/init_rl_fisher.pt --topological_constraint none > logs/run_1.1_rl_fisher_rl.out 2>&1 &
+
+# Run 1.2: AWQ SVD -> Native RL
+CUDA_VISIBLE_DEVICES=2 nohup python -m scripts.train_rl --svd_init_path outputs/svd_cache/init_awq.pt --topological_constraint none > logs/run_1.2_awq_rl.out 2>&1 &
+
+# ---------------------------------------------------------
+# PHASE 3: Cross-Paradigm Synthesis
+# ---------------------------------------------------------
+
+# Run 3.3a: AWQ SVD -> SFT Training
+CUDA_VISIBLE_DEVICES=4 nohup python -m scripts.train --svd_init_path outputs/svd_cache/init_awq.pt --topological_constraint none > logs/run_3.3a_awq_sft.out 2>&1 &
+
+# Run 3.3b: Baseline SVD -> SFT Training
+CUDA_VISIBLE_DEVICES=5 nohup python -m scripts.train --svd_init_path outputs/svd_cache/init_baseline.pt --topological_constraint none > logs/run_3.3b_baseline_sft.out 2>&1 &
+
+# ---------------------------------------------------------
+# PHASE 2: Topological Robustness Test
+# ---------------------------------------------------------
+
+# Run 2.2: AWQ SVD -> Native RL + mHC (Sinkhorn) Constraint
+CUDA_VISIBLE_DEVICES=6 nohup python -m scripts.train_rl --svd_init_path outputs/svd_cache/init_awq.pt --topological_constraint mhc > logs/run_2.2_mhc_rl.out 2>&1 &
+
+# Run 2.3: AWQ SVD -> Native RL + Skew-Symmetric Constraint
+CUDA_VISIBLE_DEVICES=7 nohup python -m scripts.train_rl --svd_init_path outputs/svd_cache/init_awq.pt --topological_constraint skew_symmetric > logs/run_2.3_skew_sym_rl.out 2>&1 &
